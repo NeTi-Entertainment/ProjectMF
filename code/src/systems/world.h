@@ -106,25 +106,8 @@ typedef enum {
     DIRECTION_COUNT
 } Direction;
 
-// Système de monde
-typedef struct {
-    EntityManager* entity_manager;    // Gestionnaire d'entités
-    Map* current_map;                 // Carte actuelle
-    TimeSystem time_system;           // Système de temps
-    EntityID player_entity;           // Entité du joueur
-    bool is_player_moving;            // Le joueur est-il en mouvement
-    Direction player_direction;       // Direction du joueur
-    float world_elapsed_time;         // Temps total écoulé
-    int current_zone;                 // Zone actuelle
-    
-    // Texture IDs pour les différents éléments du monde
-    int tileset_texture_id;           // ID de la texture du tileset
-    int player_texture_id;            // ID de la texture du joueur
-    int objects_texture_id;           // ID de la texture des objets
-    
-    // Paramètres de collision
-    bool collision_map[1024][1024];   // Carte de collision temporaire (à améliorer plus tard)
-} WorldSystem;
+// Système de monde (opaque)
+typedef struct WorldSystemInternal WorldSystem;
 
 /**
  * Initialise le système de monde
@@ -132,6 +115,13 @@ typedef struct {
  * @return Pointeur vers le système de monde ou NULL en cas d'erreur
  */
 WorldSystem* world_system_init(EntityManager* entity_manager);
+
+/**
+ * Initialise le gestionnaire de ressources avec le renderer
+ * @param system Système de monde
+ * @param renderer Renderer SDL
+ */
+void world_system_init_renderer(WorldSystem* system, SDL_Renderer* renderer);
 
 /**
  * Libère les ressources du système de monde
