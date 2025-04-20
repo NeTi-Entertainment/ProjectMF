@@ -67,14 +67,29 @@ typedef struct {
     bool is_dirty;                // Le chunk a-t-il été modifié
 } Chunk;
 
+// Structure de point de transition
+typedef struct {
+    int id;                       // ID unique de la transition
+    float x, y;                   // Position du point de transition
+    float width, height;          // Dimensions de la zone de transition
+    ZoneType target_zone;         // Zone cible
+    float target_x, target_y;     // Position cible après la transition
+    char* target_map;             // Fichier de carte cible (peut être NULL)
+} TransitionPoint;
+
 // Structure de carte
 typedef struct {
-    Chunk** chunks;           // Tableau de chunks
-    int chunks_x;             // Nombre de chunks en largeur
-    int chunks_y;             // Nombre de chunks en hauteur
-    int chunk_size;           // Taille d'un chunk en tuiles (généralement 16)
-    int tile_size;            // Taille d'une tuile en pixels
-    ZoneType current_zone;    // Zone actuelle
+    Chunk** chunks;               // Tableau de chunks
+    int chunks_x;                 // Nombre de chunks en largeur
+    int chunks_y;                 // Nombre de chunks en hauteur
+    int chunk_size;               // Taille d'un chunk en tuiles (généralement 16)
+    int tile_size;                // Taille d'une tuile en pixels
+    ZoneType current_zone;        // Zone actuelle
+    char* map_file;               // Chemin du fichier de carte (NULL si générée)
+    
+    // Points de transition vers d'autres zones
+    TransitionPoint* transitions; // Tableau des points de transition
+    int transition_count;         // Nombre de points de transition
 } Map;
 
 // Paramètres de saison
@@ -106,8 +121,38 @@ typedef enum {
     DIRECTION_COUNT
 } Direction;
 
-// Système de monde (opaque)
-typedef struct WorldSystemInternal WorldSystem;
+// Structure pour un objet interactif
+typedef struct {
+    int id;                   // ID unique de l'objet
+    EntityID entity_id;       // ID de l'entité correspondante
+    int interaction_type;     // Type d'interaction
+    float x, y;               // Position de l'objet
+    bool is_active;           // L'objet est-il actif
+} InteractiveObject;
+
+// Système de monde
+typedef struct {
+    EntityManager* entity_manager;    // Gestionnaire d'entités
+    Map* current_map;                 // Carte actuelle
+    TimeSystem time_system;           // Système de temps
+    EntityID player_entity;           // Entité du joueur
+    bool is_player_moving;            // Le joueur est-il en mouvement
+    Direction player_direction;       // Direction du joueur
+    float world_elapsed_time;         // Temps total écoulé
+    ZoneType current_zone;            // Zone actuelle
+    
+    // Texture IDs pour les différents éléments du monde
+    int tileset_texture_id;           // ID de la texture du tileset
+    int player_texture_id;            // ID de la texture du joueur
+    int objects_texture_id;           // ID de la texture des objets
+    
+    // Paramètres de collision
+    bool collision_map[1024][1024];   // Carte de collision temporaire (à améliorer plus tard)
+    
+    // Objets interactifs
+    InteractiveObject* interactive_objects;  // Tableau des objets interactifs
+    int interactive_object_count;            // Nombre d'objets interactifs
+} WorldSystem;
 
 /**
  * Initialise le système de monde
@@ -115,13 +160,6 @@ typedef struct WorldSystemInternal WorldSystem;
  * @return Pointeur vers le système de monde ou NULL en cas d'erreur
  */
 WorldSystem* world_system_init(EntityManager* entity_manager);
-
-/**
- * Initialise le gestionnaire de ressources avec le renderer
- * @param system Système de monde
- * @param renderer Renderer SDL
- */
-void world_system_init_renderer(WorldSystem* system, SDL_Renderer* renderer);
 
 /**
  * Libère les ressources du système de monde
@@ -164,6 +202,14 @@ void world_system_handle_keydown(WorldSystem* system, SDL_Keycode key);
  * @return true si le chargement a réussi, false sinon
  */
 bool world_system_load_map(WorldSystem* system, const char* filename);
+
+/**
+ * Charge une carte au format Tiled (JSON)
+ * @param system Système de monde
+ * @param filename Nom du fichier de carte Tiled
+ * @return true si le chargement a réussi, false sinon
+ */
+bool world_system_load_tiled_map(WorldSystem* system, const char* filename);
 
 /**
  * Sauvegarde une carte dans un fichier
@@ -267,5 +313,70 @@ void world_system_teleport_player(WorldSystem* system, float x, float y);
  * @return true si le changement a réussi, false sinon
  */
 bool world_system_change_zone(WorldSystem* system, ZoneType zone_type);
+
+/**
+ * Ajoute un point de transition à la carte actuelle
+ * @param system Système de monde
+ * @param x Position X du point de transition
+ * @param y Position Y du point de transition
+ * @param width Largeur de la zone de transition
+ * @param height Hauteur de la zone de transition
+ * @param target_zone Zone cible
+ * @param target_x Position X cible
+ * @param target_y Position Y cible
+ * @param target_map Fichier de carte cible (peut être NULL)
+ * @return ID du point de transition ou -1 en cas d'erreur
+ */
+int world_system_add_transition_point(WorldSystem* system, 
+                                     float x, float y, 
+                                     float width, float height,
+                                     ZoneType target_zone, 
+                                     float target_x, float target_y,
+                                     const char* target_map);
+
+/**
+ * Supprime un point de transition
+ * @param system Système de monde
+ * @param id ID du point de transition à supprimer
+ * @return true si le point a été supprimé, false sinon
+ */
+bool world_system_remove_transition_point(WorldSystem* system, int id);
+
+/**
+ * Vérifie si le joueur est entré dans une zone de transition
+ * @param system Système de monde
+ * @return ID du point de transition ou -1 si aucune transition n'est déclenchée
+ */
+int world_system_check_transition(WorldSystem* system);
+
+/**
+ * Ajoute un objet interactif au monde
+ * @param system Système de monde
+ * @param entity_id ID de l'entité correspondante
+ * @param interaction_type Type d'interaction
+ * @param x Position X de l'objet
+ * @param y Position Y de l'objet
+ * @return ID de l'objet interactif ou -1 en cas d'erreur
+ */
+int world_system_add_interactive_object(WorldSystem* system, 
+                                       EntityID entity_id,
+                                       int interaction_type,
+                                       float x, float y);
+
+/**
+ * Supprime un objet interactif
+ * @param system Système de monde
+ * @param id ID de l'objet interactif à supprimer
+ * @return true si l'objet a été supprimé, false sinon
+ */
+bool world_system_remove_interactive_object(WorldSystem* system, int id);
+
+/**
+ * Trouve l'objet interactif le plus proche du joueur
+ * @param system Système de monde
+ * @param max_distance Distance maximale de recherche
+ * @return ID de l'objet interactif ou -1 si aucun objet n'est trouvé
+ */
+int world_system_find_nearest_interactive_object(WorldSystem* system, float max_distance);
 
 #endif /* WORLD_H */
