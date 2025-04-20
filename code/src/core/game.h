@@ -14,6 +14,9 @@
 # include "../systems/world.h"
 # include "../systems/entity_manager.h"
 
+// Forward declaration pour éviter les inclusions circulaires
+typedef struct Phase3Systems Phase3Systems;
+
 //Structure de contexte du jeu contenant tous les sous-systemes
 typedef struct GameContext
 {
@@ -27,6 +30,7 @@ typedef struct GameContext
 	RenderSystem*	render_system;	//systeme de rendu
 	WorldSystem*	world_system;	//systeme de gestion du monde
 	EntityManager*	entity_manager;	//gestionnaire d'entites
+	Phase3Systems*  phase3_systems; //systemes de la phase 3
 	//ajouter d'autres sous-systemes au fur et a mesure, quete, inventaire, etc
 }	GameContext;
 

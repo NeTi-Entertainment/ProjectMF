@@ -15,6 +15,7 @@
 #include "../systems/render.h"
 #include "../systems/world.h"
 #include "../systems/entity_manager.h"
+#include "../core/phase3_integration.h" // Ajout de l'inclusion pour la phase 3
 
 // Constantes du jeu
 #define WINDOW_TITLE "Stardew Valley Clone"
@@ -39,6 +40,7 @@ GameContext* game_init(void) {
     game->screen_height = DEFAULT_SCREEN_HEIGHT;
     game->last_update_time = 0;
     game->delta_time = 0.0f;
+    game->phase3_systems = NULL; // Initialisation du pointeur des systèmes de phase 3
     
     // Initialiser SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
@@ -130,6 +132,13 @@ GameContext* game_init(void) {
         // Continuer quand même, ce n'est pas une erreur fatale
     }
     
+    // Initialiser les systèmes de la phase 3
+    game->phase3_systems = phase3_init(game);
+    if (!check_ptr(game->phase3_systems, LOG_LEVEL_ERROR, "Échec d'initialisation des systèmes de la phase 3")) {
+        // Continuer même en cas d'échec, ce n'est pas fatal
+        log_warning("Les fonctionnalités de la phase 3 ne seront pas disponibles");
+    }
+    
     // Charger les textures de base
     // Note: cette partie serait normalement gérée par un système de ressources,
     // mais pour simplifier, nous le faisons ici pour le prototype.
@@ -158,6 +167,12 @@ void game_handle_events(GameContext* game) {
                 break;
                 
             case SDL_KEYDOWN:
+                // Si les systèmes de la phase 3 sont initialisés, leur donner la priorité
+                if (game->phase3_systems && phase3_handle_keydown(game->phase3_systems, event.key.keysym.sym)) {
+                    // L'événement a été traité par les systèmes de la phase 3
+                    break;
+                }
+                
                 // Gérer les touches spéciales
                 if (event.key.keysym.sym == SDLK_ESCAPE) {
                     game->running = false;
@@ -179,6 +194,19 @@ void game_handle_events(GameContext* game) {
                 
                 // Propager l'événement au système de monde
                 world_system_handle_keydown(game->world_system, event.key.keysym.sym);
+                break;
+            
+            case SDL_MOUSEBUTTONDOWN:
+                // Si les systèmes de la phase 3 sont initialisés, leur donner la priorité
+                if (game->phase3_systems && phase3_handle_mousedown(game->phase3_systems, 
+                                                                  event.button.button, 
+                                                                  event.button.x, 
+                                                                  event.button.y)) {
+                    // L'événement a été traité par les systèmes de la phase 3
+                    break;
+                }
+                
+                // Sinon, traiter normalement (si vous avez un traitement pour les clics de souris)
                 break;
                 
             case SDL_WINDOWEVENT:
@@ -213,6 +241,11 @@ void game_update(GameContext* game) {
     // Mettre à jour les systèmes
     world_system_update(game->world_system, game->delta_time);
     
+    // Mettre à jour les systèmes de la phase 3
+    if (game->phase3_systems) {
+        phase3_update(game->phase3_systems, game->delta_time);
+    }
+    
     // Limiter le taux de rafraîchissement
     uint32_t frame_time = SDL_GetTicks() - current_time;
     if (frame_time < MS_PER_FRAME) {
@@ -227,6 +260,11 @@ void game_render(GameContext* game) {
     // Rendre le monde à travers le système de monde
     // Notre système de rendu avec résolution interne gère maintenant l'effacement et la présentation
     world_system_render(game->world_system, game->render_system);
+    
+    // Rendre les éléments visuels des systèmes de la phase 3
+    if (game->phase3_systems) {
+        phase3_render(game->phase3_systems);
+    }
 }
 
 // Libère toutes les ressources et ferme le jeu
@@ -234,6 +272,12 @@ void game_shutdown(GameContext* game) {
     if (!game) return;
     
     log_info("Fermeture du jeu en cours...");
+    
+    // Libérer les systèmes de la phase 3
+    if (game->phase3_systems) {
+        phase3_shutdown(game->phase3_systems);
+        game->phase3_systems = NULL;
+    }
     
     // Libérer les systèmes dans l'ordre inverse d'initialisation
     if (game->world_system) {
